@@ -12,22 +12,16 @@ nurbs_initial = nurbs;
 
 % Choice of the NURBS degree, regularity of the basis and mesh size
 p_vector = [2]; 
-n_elem = 2^5; % in one parametric direction
+n_elem = 2^4; % in one parametric direction
 h = 1 / n_elem; % characteristic mesh size for the geometry
 
 % set physical DATA, boundary conditions
 %----------------------------------------
-mu = @(x,y) 1;   % bilaplacian coefficient
-b = @(x, y) ([0 * x .* y; 0 * x .* y]);
-f = @(x, y) ((8 * pi^2 - 1) .* sin(2 * pi * x) .* sin(2 * pi * y)); % ??????  % source term
-f_time = @(t) (exp(-t)); % ?????
+mu = @(x,y) 1e1;   % bilaplacian coefficient
 rho = @(x, y) (1 + 0 * x .* y);   % coefficient for time dependent term
 
 drchlt_sides = [1 2 3 4];   % indexes for Dirichlet faces
 nmnn_sides = [];   % indexes for Neuman faces
-
-g = @(x, y, ind) (sin(2 * pi * x) .* sin(2 * pi * y) .* exp(-ind)); % Dirichlet BCs
-h = @(x, y, ind) (0 + 0 * x);    % Neuman data (for different boundaries)
 
 drchlt_imposition_type = 'int'; % 'L2' = L2 projection, 
                                 % 'int' = interpolation at control points
@@ -40,7 +34,7 @@ Nt = round(Tf / dt);
 
 % parameter for theta method
 %----------------------------
-theta = 0.5;
+theta = 0;
 
 % output settings
 %------------------
@@ -85,9 +79,6 @@ space = sp_nurbs_2d(geometry.nurbs, msh);
 matrix_A = op_laplaceu_laplacev_tp(space, space, msh, mu);
 matrix_M = op_u_v_tp(space, space, msh, rho);
 
-rhs_F = op_f_v_tp(space, msh, f); %???
-rhs_Neuman = zeros(size(rhs_F)); % ????
-
 % Set Dirichlet BCs
 %----------------------
 switch drchlt_imposition_type
@@ -120,17 +111,19 @@ switch drchlt_imposition_type
             end
             x_iside = reshape(nurbs.coefs(1, i1_iside, i2_iside) ./ nurbs.coefs(4, i1_iside, i2_iside), n_dof_iside, 1);
             y_iside = reshape(nurbs.coefs(2, i1_iside, i2_iside) ./ nurbs.coefs(4, i1_iside, i2_iside), n_dof_iside, 1);    
-            u_drchlt_iside = [u_drchlt_iside; g(x_iside, y_iside, iside)];       
+            % u_drchlt_iside = [u_drchlt_iside; g(x_iside, y_iside, iside)];       
         end
         [drchlt_dofs, i_drchlt_dofs] = unique(drchlt_dofs_iside); 
-        u_drchlt = u_drchlt_iside(i_drchlt_dofs);
+        % u_drchlt = u_drchlt_iside(i_drchlt_dofs);
 end
 
 int_dofs = setdiff(1:space.ndof, drchlt_dofs);
 
+close all
+
 % initial condition
 %=========================================
-u = rand(space.ndof, 1);
+u = 0.2+ 0.6 * rand(space.ndof, 1);
 
 % Loop over time
 %==========================================
@@ -140,21 +133,27 @@ for n = 0:Nt-1
     time_n = n * dt;
     time_np1 = (n + 1) * dt;
 
-    rhs_time_n = f_time(time_n) * rhs_F + rhs_Neuman; %???
-    rhs_time_np1 = f_time(time_np1) * rhs_F + rhs_Neuman; %???
+    % aribitrariamente, scegliamo di tenere matrix_T al tempo vecchio
+    matrix_T = op_u_v_tp_cahn_hilliard(space, space, msh, u_old, rho);
 
-    matrix = matrix_M + theta * dt * matrix_A;
-    rhs = (matrix_M - (1 - theta) * dt * matrix_A) * u_old ...
-          + dt * (theta * rhs_time_np1 + (1 - theta) * rhs_time_n);
+    fun = matrix_M ;
+    J = ;
+    niter = 1000;
+    toll = 1e-6;
+    [u, it] = newtonsys(u_old, niter, toll, fun, J);
+   
+    % SALVATAGGIO DEI DATI IN PIU' FILE
+    % NOME DELLA CARTELLA DA CAMBIARE OGNI VOLTA
+    output_folder = 'results/results_c';
+    
+    if ~exist(output_folder, 'dir')
+        mkdir(output_folder);
+    end
 
-    % apply Dirichlet BCs
-    %---------------------
-    u = zeros(space.ndof, 1);
-    u(drchlt_dofs) = u_drchlt;
-    rhs(int_dofs) = rhs(int_dofs) ...
-                  - matrix(int_dofs, drchlt_dofs) * u_drchlt;
+    % NOME DEL FILE DA CAMBIARE OGNI VOLTA
+    output_file_name_n = sprintf('results_c_%04d.vtk', n);
+    sp_to_vtk(u, space, geometry, vtk_pts, output_file_name_n, 'u');
 
-    % Solve the linear system (direct method)
-    %------------------------------------------
-    u(int_dofs) = matrix(int_dofs, int_dofs) \ rhs(int_dofs);
+    fprintf('The result is saved in the file: %s \n', output_file_name_n);
+
 end

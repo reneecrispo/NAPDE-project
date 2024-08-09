@@ -12,22 +12,17 @@ nurbs_initial = nurbs;
 
 % Choice of the NURBS degree, regularity of the basis and mesh size
 p_vector = [2]; 
-n_elem = 2^5; % in one parametric direction
+n_elem = 2^4; % in one parametric direction
 h = 1 / n_elem; % characteristic mesh size for the geometry
 
 % set physical DATA, boundary conditions
 %----------------------------------------
 mu = @(x,y) 1;   % bilaplacian coefficient
-b = @(x, y) ([0 * x .* y; 0 * x .* y]);
-f = @(x, y) ((8 * pi^2 - 1) .* sin(2 * pi * x) .* sin(2 * pi * y)); % ??????  % source term
-f_time = @(t) (exp(-t)); % ?????
 rho = @(x, y) (1 + 0 * x .* y);   % coefficient for time dependent term
 
 drchlt_sides = [1 2 3 4];   % indexes for Dirichlet faces
 nmnn_sides = [];   % indexes for Neuman faces
 
-g = @(x, y, ind) (sin(2 * pi * x) .* sin(2 * pi * y) .* exp(-ind)); % Dirichlet BCs
-h = @(x, y, ind) (0 + 0 * x);    % Neuman data (for different boundaries)
 
 drchlt_imposition_type = 'int'; % 'L2' = L2 projection, 
                                 % 'int' = interpolation at control points
@@ -40,7 +35,7 @@ Nt = round(Tf / dt);
 
 % parameter for theta method
 %----------------------------
-theta = 0.5;
+theta = 0;
 
 % output settings
 %------------------
@@ -85,8 +80,28 @@ space = sp_nurbs_2d(geometry.nurbs, msh);
 matrix_A = op_laplaceu_laplacev_tp(space, space, msh, mu);
 matrix_M = op_u_v_tp(space, space, msh, rho);
 
-rhs_F = op_f_v_tp(space, msh, f); %???
-rhs_Neuman = zeros(size(rhs_F)); % ????
+% matrix_T è il tensore associato all'integrale del prodotto di tre
+% funzioni di base 
+
+% Numero di funzioni di base
+N = size(matrix_M, 1);
+
+% Inizializzare la matrice cubica
+matrix_T = zeros(N, N, N);
+
+% Calcoliamo la matrice cubica usando il prodotto di Kronecker
+for i = 1:N
+    for j = 1:N
+        % prodotto di Kronecker delle righe
+        kron_prod = kron(matrix_M(i, :), matrix_M(j, :));
+       
+        % Riorganizziamo il risultato in una matrice [N, N]
+        kron_matrix = reshape(kron_prod, [N, N]);
+        
+        % Salviamo la matrice risultante nella matrice cubica
+        matrix_T(i, j, :) = kron_matrix * matrix_M(j, :)';
+    end
+end
 
 % Set Dirichlet BCs
 %----------------------
@@ -120,10 +135,10 @@ switch drchlt_imposition_type
             end
             x_iside = reshape(nurbs.coefs(1, i1_iside, i2_iside) ./ nurbs.coefs(4, i1_iside, i2_iside), n_dof_iside, 1);
             y_iside = reshape(nurbs.coefs(2, i1_iside, i2_iside) ./ nurbs.coefs(4, i1_iside, i2_iside), n_dof_iside, 1);    
-            u_drchlt_iside = [u_drchlt_iside; g(x_iside, y_iside, iside)];       
+            % u_drchlt_iside = [u_drchlt_iside; g(x_iside, y_iside, iside)];       
         end
         [drchlt_dofs, i_drchlt_dofs] = unique(drchlt_dofs_iside); 
-        u_drchlt = u_drchlt_iside(i_drchlt_dofs);
+        % u_drchlt = u_drchlt_iside(i_drchlt_dofs);
 end
 
 int_dofs = setdiff(1:space.ndof, drchlt_dofs);
@@ -140,21 +155,11 @@ for n = 0:Nt-1
     time_n = n * dt;
     time_np1 = (n + 1) * dt;
 
-    rhs_time_n = f_time(time_n) * rhs_F + rhs_Neuman; %???
-    rhs_time_np1 = f_time(time_np1) * rhs_F + rhs_Neuman; %???
+    % passaggi per calcolare u_old' * matrix_T * u_old
+    B = squeeze(sum(matrix_T .* reshape(u_old, [1, 1, numel(u_old)]), 3));
+    result1 = B .* u_old';
+    result2 = B .* (u_old .* u_old)';
 
-    matrix = matrix_M + theta * dt * matrix_A;
-    rhs = (matrix_M - (1 - theta) * dt * matrix_A) * u_old ...
-          + dt * (theta * rhs_time_np1 + (1 - theta) * rhs_time_n);
+    u = matrix_M \ (matrix_M * u_old - dt * matrix_A * u_old - dt * result2.^2 * (u_old .* u_old) + dt * result1 * u_old);
 
-    % apply Dirichlet BCs
-    %---------------------
-    u = zeros(space.ndof, 1);
-    u(drchlt_dofs) = u_drchlt;
-    rhs(int_dofs) = rhs(int_dofs) ...
-                  - matrix(int_dofs, drchlt_dofs) * u_drchlt;
-
-    % Solve the linear system (direct method)
-    %------------------------------------------
-    u(int_dofs) = matrix(int_dofs, int_dofs) \ rhs(int_dofs);
 end
