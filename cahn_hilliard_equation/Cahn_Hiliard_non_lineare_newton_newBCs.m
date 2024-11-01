@@ -19,11 +19,9 @@ h = 1 / n_elem; % characteristic mesh size for the geometry
 
 % set physical DATA, boundary conditions
 %----------------------------------------
-<<<<<<< HEAD
-mu = @(x,y)0.5*h^2;   % bilaplacian coefficient
-=======
-mu = @(x,y)h^2;   % bilaplacian coefficient
->>>>>>> 3f9782272b5e7ffdb983a0d1138f9a38aab12178
+
+mu = @(x,y)0.05*h^2;   % bilaplacian coefficient
+
 rho = @(x, y) (1 + 0 * x .* y);   % coefficient for time dependent term
 
 drchlt_sides = [];   % indexes for Dirichlet faces
@@ -34,18 +32,11 @@ drchlt_imposition_type = 'int'; % 'L2' = L2 projection,
 
 % time and time step
 %--------------------
-<<<<<<< HEAD
-dt = 1e-6;
-Tf = 10000*dt;
-=======
-dt = 1e-5;
-Tf = 1000*dt;
->>>>>>> 3f9782272b5e7ffdb983a0d1138f9a38aab12178
-Nt = round(Tf / dt);
 
-% parameter for theta method
-%----------------------------
-theta = 0;
+dt = 1e-2;
+Tf = 1000*dt;
+
+Nt = round(Tf / dt);
 
 % output settings
 %------------------
@@ -85,6 +76,33 @@ space = sp_nurbs_2d(geometry.nurbs, msh);
 matrix_A = op_laplaceu_laplacev_tp(space, space, msh, mu);
 matrix_M = op_u_v_tp(space, space, msh, rho);
 
+% Impostazione delle condizioni di Dirichlet omogenee su una cornice di spessore due DOF
+%---------------------------------------------------------------------------------------
+drchlt_dofs = []; % Lista dei DOFs per la cornice
+
+% Impostazione della cornice con condizioni di Dirichlet su una griglia 19x19
+N = sqrt(space.ndof); % Numero di nodi per lato (19x19 griglia)
+u = zeros(space.ndof, 1); % Vettore dei valori su tutta la griglia
+u_drchlt = 0; % Condizione Dirichlet omogenea (zero)
+
+% Definizione dei DOFs per la cornice doppia (primo e secondo strato di nodi ai bordi)
+drchlt_dofs = unique([1:N, ...                    % Prima riga
+                      N*(N-1)+1:N^2, ...          % Ultima riga
+                      1:N:N*(N-1)+1, ...          % Prima colonna
+                      N:N:N^2, ...                % Ultima colonna
+                      N+1:2*N, ...                % Seconda riga
+                      N*(N-2)+1:N*(N-1), ...      % Penultima riga
+                      2:N:N^2-N+2, ...            % Seconda colonna
+                      N-1:N:N^2-1]);            % Penultima colonna
+% Imposta il valore di Dirichlet (zero) sui DOFs della cornice
+u(drchlt_dofs) = u_drchlt;
+
+% Visualizza il numero di DOFs e la conferma dell'imposizione Dirichlet
+fprintf('Numero di DOFs nella cornice doppia: %d\n', length(drchlt_dofs));
+disp('Condizioni di Dirichlet imposte con successo sui DOFs della cornice doppia.');
+% Trova i gradi di libertà interni
+int_dofs = setdiff(1:space.ndof, drchlt_dofs);
+
 
 % initial condition
 %=========================================
@@ -94,16 +112,16 @@ Y = coefs(2,:) ; % Coordinate Y dei nodi
 
 
 for i = 1:length(X)
-    if(        (X(1,i) >= 0.3 && X(1,i) <= 0.45) && ((Y(1,i) >= 0.35 && Y(1,i) <= 0.55)) ...
-           || (X(1,i) >= 0.55  && X(1,i) <= 0.7)&& ((Y(1,i) >= 0.3 && Y(1,i) <= 0.5)) ...
-         || (X(1,i) >= 0.35 && X(1,i) <= 0.6) && ((Y(1,i) >= 0.6 &&Y(1,i)<=0.75)))
-      %if((X(1,i) >= 0.20 && X(1,i) <= 0.80) && ((Y(1,i) >= 0.20 && Y(1,i) <= 0.80)))
+     if(        (X(1,i) >= 0.2 && X(1,i) <= 0.45) && ((Y(1,i) >= 0.25 && Y(1,i) <= 0.55)) ...
+            || (X(1,i) >= 0.55  && X(1,i) <= 0.8)&& ((Y(1,i) >= 0.2 && Y(1,i) <= 0.5)) ...
+          || (X(1,i) >= 0.2 && X(1,i) <= 0.75) && ((Y(1,i) >= 0.6 &&Y(1,i)<=0.8)))
+      %if((X(1,i) >= 0.25 && X(1,i) <= 0.50) && ((Y(1,i) >= 0.25 && Y(1,i) <= 0.75)))
       %u_init_values(i) = 0.5 + 0.2 * sin(1*pi*X(1,i)).^0.1 .* sin(1*pi*Y(1,i)).^0.1; 
        % u_init_values(i)= 0.2 * cos(8*pi*X(1,i)).^0.1 .* cos(8*pi*Y(1,i)).^0.1;
-       u_init_values(i)= 0.3*rand;
+       u_init_values(i)= 0.70+0.2*rand;
         %u_init_values(i)= 0.2+ 0.1 * cos(18*pi*X(1,i)).* cos(18*pi*Y(1,i));
     else 
-       u_init_values(i) = 0.99;
+       u_init_values(i) = 0.01;
     end
 end
 
@@ -149,18 +167,17 @@ for n = 0 : (Nt-1)
 
 
     [u, it] = newtonsys(u_old, niter, toll, fun, J);
+    
+    u(drchlt_dofs) = 0; %imposizione condizioni di Dirichelet
     it;
 
+   
     % Save results to files
-<<<<<<< HEAD
-    output_folder = 'results/results_t';
+
+    output_folder = 'results/results_NewBC_f';
     % File name for each time step
-    output_file_name_n = sprintf('%s/results_t_%04d', output_folder, n+1);
-=======
-    output_folder = 'results/results_a';
-    % File name for each time step
-    output_file_name_n = sprintf('%s/results_a_%04d', output_folder, n+1);
->>>>>>> 3f9782272b5e7ffdb983a0d1138f9a38aab12178
+    output_file_name_n = sprintf('%s/results_NewBC_f_%04d', output_folder, n+1);
+
 
     % Create the folder if it does not exist
     if ~exist(output_folder, 'dir')
