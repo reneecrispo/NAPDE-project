@@ -7,8 +7,7 @@ This repository contains code and tools for solving partial differential equatio
 ## Structure
 The project is organized into three main folders:
 1. `geopdes`, `geopdes_hierarchical`, `nurbs-1.4.3`: those are the folders of the GeoPDEs library used for isogeometric methods. 
-2. `heat_equation`: it contains the code for solving the heat equation
-3. `cahn_hilliard_equation`: it contains the code for solving the Cahn-Hilliard equation, including the coupled problem with nutrients. It also contains a subfolder `results` where all the VTS files with simulation results are stored for each time instance.
+2. `cahn_hilliard_equation`: it contains the code for solving the Cahn-Hilliard equation, including the coupled problem with nutrients. It also contains a subfolder `results` where all the VTS files with simulation results are stored for each time instance.
 
 ## Script
 In order to run any of the scripts, ensure that the library is set up correctly by first running the file `add_path.m`.
