@@ -2,7 +2,6 @@ clear all;
 clc;
 close all;
 
-
 % Generate Geometry
 %------------------------------------
 display_nurbs_surface_square;
@@ -11,20 +10,19 @@ nurbs_initial = nurbs;
 
 % Choice of the NURBS degree, regularity of the basis and mesh size
 p_vector = [2]; 
-n_elem = 2^4;
-h = 1 / n_elem; 
+n_elem = 2^4; 
+h = 1 / n_elem;
 
 % set physical DATA, boundary conditions
 %----------------------------------------
-mu = @(x,y) 0.3*h^2;   % bilaplacian coefficient
-rho = @(x,y) (1 + 0 * x .* y);   % coefficient for time dependent term
+mu = @(x,y) 0.02*h^2;   % bilaplacian coefficient
+rho = @(x, y) (1 + 0 * x .* y);   % coefficient for time dependent term
 
 % time and time step
 %--------------------
 dt = 1e-4;
-Tf = 1000*dt;
+Tf = 4000*dt;
 Nt = round(Tf / dt);
-
 
 % output settings
 %------------------
@@ -34,8 +32,8 @@ knots = nurbs_initial.knots;
 vtk_pts = {linspace(knots{1}(1), knots{1}(end), n_pts_viz), ...
            linspace(knots{2}(1), knots{2}(end), n_pts_viz)};
 
-p = p_vector(1); 
-k = 1;
+p = p_vector(1);
+k = 1; 
 nurbs = nrbdegelev(nurbs_initial, [(p - 1) (p - 1)]);
 
 new_knots_notrepeated = [1:(n_elem - 1)] / n_elem;
@@ -58,7 +56,7 @@ knots = geometry.nurbs.knots;
 msh = msh_2d(knots, qn, qw, geometry);
 space = sp_nurbs_2d(geometry.nurbs, msh);
 
-% assemble the matrix and vectors whose data do not depend on time.
+% Assemble the matrix and vectors whose data do not depend on time
 %-----------------------------------------------------------------
 matrix_A = op_laplaceu_laplacev_tp(space, space, msh, mu);
 matrix_M = op_u_v_tp(space, space, msh, rho);
@@ -92,25 +90,16 @@ coefs = reshape(nurbs.coefs, [], nurbs.number(1) * nurbs.number(2));
 X = coefs(1,:) ;
 Y = coefs(2,:) ; 
 
-
 for i = 1:length(X)
-    if((X(1,i) >= 0.30 && X(1,i) <= 0.70) && ((Y(1,i) >= 0.45 && Y(1,i) <= 0.55)))
-       u_init_values(i)= 1;
+     if((X(1,i) >= 0.30 && X(1,i) <= 0.70) && ((Y(1,i) >= 0.30 && Y(1,i) <= 0.70)))
+       u_init_values(i)= 1.0;
     else 
-       u_init_values(i) = 0;
+       u_init_values(i) = 0.0;
     end
 end
 
 u = zeros(space.ndof, 1);
 u(1:length(u_init_values)) = u_init_values;
-
-% Nutrient definition:
-% --------------------------------------------------------------
-P_0 = 10;
-gamma_n = @(x,y) P_0 * (1 - 0.5*x + 0*y);
-
-matrix_M_tilde = op_u_v_tp(space, space, msh, gamma_n);
-
 
 % Loop over time
 %==========================================
@@ -119,24 +108,23 @@ for n = 0 : (Nt-1)
 
     g = @(u) 2*(- 2 - 4*u.^2 + 6*u);    
     dg = @(u) 2*(-8*u + 6);
-  
+ 
     matrix_T = @(x) op_u_v_tp_cahn_hilliard_non_lin(space, space, msh,g,x);
     matrix_derT = @(x) op_u_v_tp_cahn_hilliard_non_lin(space, space, msh,dg,x);
   
-    fun = @(x) (matrix_M + dt * matrix_A - dt * matrix_M_tilde - dt * matrix_T(x)) * x ...
-            - matrix_M * u_old;
+    fun = @(x) (matrix_M + dt * matrix_A - dt * matrix_T(x)) * x - matrix_M * u_old;
    
     J = @(x) matrix_M + dt * matrix_A - dt * matrix_T(x) ...
-       - dt * matrix_derT(x) * x * ones(size(x))' * matrix_M';
+           - dt * matrix_derT(x) * x * ones(size(x))' * matrix_M';
    
-    niter = 15;
+    niter = 10;
     toll = 1e-3;
 
     [u, it] = newtonsys(u_old, niter, toll, fun, J);
     u(drchlt_dofs) = 0; 
 
-    output_folder = 'results/results_CP_o';
-    output_file_name_n = sprintf('%s/results_CP_o_%04d', output_folder, n+1);
+    output_folder = 'results/results_a';
+    output_file_name_n = sprintf('%s/results_a_%04d', output_folder, n+1);
 
     if ~exist(output_folder, 'dir')
         mkdir(output_folder);
